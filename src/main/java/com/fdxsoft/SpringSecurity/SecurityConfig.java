@@ -15,10 +15,10 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
 
         return httpSecurity
-                .csrf(Customizer.withDefaults()) // Asi se configura si vamos a trabajar con formularios / Si no, se usa
-                                                 // esto: csrf -> csrf.disable()
-                .authorizeHttpRequests(
-                        auth -> auth.requestMatchers("/v1/index2").permitAll().anyRequest().authenticated())
+                .authorizeHttpRequests(auth -> {
+                    auth.requestMatchers("/v1/index2").permitAll();
+                    auth.anyRequest().authenticated();
+                })
                 .formLogin(Customizer.withDefaults())
                 .build();
     }
