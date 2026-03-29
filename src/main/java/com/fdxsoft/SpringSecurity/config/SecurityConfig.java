@@ -5,7 +5,6 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.Customizer;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -27,9 +26,9 @@ public class SecurityConfig {
     public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
 
         return httpSecurity
-                .csrf(Customizer.withDefaults()) // Se usa csrf -> csrf.disable() solo si no vamos a usar forms en el
-                                                 // front-end. Pero lo ocupamos en el Postman para poder ejecutar algun
-                                                 // metodo.
+                .csrf(csrf -> csrf
+                        // 1. Desactivas CSRF SOLO para los endpoints de la API (Postman/Microservicios)
+                        .ignoringRequestMatchers("/api/v1/**"))
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.GET, "/v1/index2").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/createUser").permitAll();
