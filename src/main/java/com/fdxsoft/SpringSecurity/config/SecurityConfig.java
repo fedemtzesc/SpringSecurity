@@ -1,54 +1,71 @@
 package com.fdxsoft.SpringSecurity.config;
 
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.session.SessionRegistry;
 import org.springframework.security.core.session.SessionRegistryImpl;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.provisioning.InMemoryUserDetailsManager;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.AuthenticationSuccessHandler;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import com.fdxsoft.SpringSecurity.filters.JwtAuthenticationFilter;
+import com.fdxsoft.SpringSecurity.filters.JwtAuthorizationFilter;
+import com.fdxsoft.SpringSecurity.utils.JwtUtils;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
+    @Autowired
+    private JwtUtils jwtUtils;
+
+    @Autowired
+    private JwtAuthorizationFilter jwtAuthorizationFilter;
+
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity httpSecurity) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity httpSecurity, AuthenticationManager authenticationManager)
+            throws Exception {
+
+        // Configuración del filtro JWT
+        JwtAuthenticationFilter jwtAuthenticationFilter = new JwtAuthenticationFilter(jwtUtils);
+        jwtAuthenticationFilter.setAuthenticationManager(authenticationManager);
+        jwtAuthenticationFilter.setFilterProcessesUrl("/api/v1/login");
 
         return httpSecurity
-                .csrf(csrf -> csrf
-                        // 1. Desactivas CSRF SOLO para los endpoints de la API (Postman/Microservicios)
-                        .ignoringRequestMatchers("/api/v1/**"))
+                // 1. Deshabilitar CSRF (No se usa en APIs Stateless con JWT)
+                .csrf(csrf -> csrf.disable())
+
+                // 2. Configurar como STATELESS (El servidor no guarda sesiones)
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // 3. Reglas de acceso
                 .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.GET, "/v1/index2").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/createUser").permitAll();
+
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/accessAdmin").hasRole("ADMIN");
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/accessUser").hasRole("USER");
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/accessDeveloper").hasRole("DEVELOPER");
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/accessGuest").hasRole("GUEST");
+
                     auth.anyRequest().authenticated();
                 })
-                .formLogin(form -> form
-                        .successHandler(this.successHandler()) // Si las credenciales son correctas, se ejecuta el
-                                                               // successHandler
-                        .permitAll())
-                .sessionManagement(session -> session
-                        .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED) // Se usa
-                                                                                  // SessionCreationPolicy.STATELESS
-                                                                                  // solo si NO vamos a usar forms en el
-                                                                                  // front-end
-                        .invalidSessionUrl("/error")
-                        .sessionFixation(fixation -> fixation.migrateSession())
-                        .maximumSessions(1)
-                        .sessionRegistry(this.sessionRegistry())
-                        .expiredUrl("/login"))
-                .httpBasic(Customizer.withDefaults())
+
+                // 4. Agregar el filtro JWT
+                .addFilter(jwtAuthenticationFilter)
+
+                .addFilterBefore(jwtAuthorizationFilter, UsernamePasswordAuthenticationFilter.class)
+
+                // NOTA: Se eliminó formLogin() para que no regrese HTML
                 .build();
     }
 
@@ -65,23 +82,15 @@ public class SecurityConfig {
     }
 
     // *************************************************************************************************************
-    // Cuando incormporamos estos tres metodos, estamos utilizando una configuracion
-    // basica de spring security
-    // pero usando un Usuario en memoria.
-    // Por lo cual tenemos que eliminar los parametros que tenemos configurados en
-    // application.properties
-    // para que funcione, y ademas para que nos siga funcionando el formulario
-    // tenemos que usar SessionCreationPolicy.IF_REQUIRED
-    @Bean
-    public UserDetailsService userDetailsService() {
-        return new InMemoryUserDetailsManager(User.withUsername("federico").password("admin").roles("ADMIN").build());
-    }
+    // El UserDetailsServiceImpl se encarga de cargar el usuario desde la base de
+    // datos, por lo cual no es necesario configurar el userDetailsService en el
+    // AuthenticationManagerBuilder, el solito lo detecta de manera automatica
 
     @Bean
     public PasswordEncoder passwordEncoder() {
         // Regresamos una instancia de NoOpPasswordEncoder, por que de momento, no se
         // requiere encriptar el password
-        return org.springframework.security.crypto.password.NoOpPasswordEncoder.getInstance();
+        return new BCryptPasswordEncoder();
     }
 
     @Bean

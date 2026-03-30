@@ -8,6 +8,7 @@ import java.util.stream.Collectors;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -30,6 +31,9 @@ public class PrincipalController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private PasswordEncoder passwordEncoder;
+
     @GetMapping("/hello")
     public String hello() {
         return "Hello World Not Secured";
@@ -50,7 +54,7 @@ public class PrincipalController {
 
         UserEntity userEntity = UserEntity.builder()
                 .username(createUserDTO.getUsername())
-                .password(createUserDTO.getPassword())
+                .password(passwordEncoder.encode(createUserDTO.getPassword()))
                 .email(createUserDTO.getEmail())
                 .roles(roles)
                 .build();
@@ -74,9 +78,9 @@ public class PrincipalController {
         Map<String, Object> response = new LinkedHashMap<>();
 
         try {
-        	if(!userRepository.existsById(Long.parseLong(id))) {
-        		throw new Exception("No se encontró el usuario con ID: " + id);
-        	}
+            if (!userRepository.existsById(Long.parseLong(id))) {
+                throw new Exception("No se encontró el usuario con ID: " + id);
+            }
             userRepository.deleteById(Long.parseLong(id));
             response.put("status", HttpStatus.CREATED.value());
             response.put("message", "Usuario eliminado con éxito");
